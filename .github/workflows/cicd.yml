@@ -1,0 +1,219 @@
+name: Enterprise DevSecOps Pipeline
+
+on:
+
+  push:
+    branches:
+      - main
+
+    paths:
+      - 'src/**'
+      - 'nginx/**'
+      - 'Dockerfile'
+      - '.github/workflows/**'
+
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: web-frontend-main
+  cancel-in-progress: true
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/web-frontend
+
+jobs:
+
+  build-security-deploy:
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 30
+
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+      id-token: write
+
+    steps:
+
+      # --------------------------------------------------
+      # Checkout
+      # --------------------------------------------------
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # --------------------------------------------------
+      # Docker Buildx
+      # --------------------------------------------------
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # --------------------------------------------------
+      # Login GHCR
+      # --------------------------------------------------
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # --------------------------------------------------
+      # Build Image
+      # --------------------------------------------------
+
+      - name: Build Docker Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.IMAGE_NAME }}:latest
+
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+          load: true
+
+      # --------------------------------------------------
+      # Trivy Filesystem Scan
+      # --------------------------------------------------
+
+      - name: Trivy Filesystem Scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+
+          severity: CRITICAL,HIGH
+
+          exit-code: 1
+
+      # --------------------------------------------------
+      # Trivy Image Scan
+      # --------------------------------------------------
+
+      - name: Trivy Image Scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+          format: sarif
+          output: trivy-results.sarif
+
+          severity: CRITICAL,HIGH
+
+          exit-code: 1
+
+      # --------------------------------------------------
+      # Upload SARIF
+      # --------------------------------------------------
+
+      - name: Upload Trivy SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+
+      # --------------------------------------------------
+      # Push Images
+      # --------------------------------------------------
+
+      - name: Push Docker Images
+        run: |
+          docker push $IMAGE_NAME:${{ github.sha }}
+          docker push $IMAGE_NAME:latest
+
+      # --------------------------------------------------
+      # Install Cosign
+      # --------------------------------------------------
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
+      # --------------------------------------------------
+      # Sign Images
+      # --------------------------------------------------
+
+      - name: Sign Container Images
+        run: |
+          cosign sign --yes \
+          $IMAGE_NAME:${{ github.sha }}
+
+          cosign sign --yes \
+          $IMAGE_NAME:latest
+
+      # --------------------------------------------------
+      # Verify Signature
+      # --------------------------------------------------
+
+      - name: Verify Signature
+        run: |
+          cosign verify \
+          --certificate-identity-regexp=.* \
+          --certificate-oidc-issuer=https://token.actions.githubusercontent.com \
+          $IMAGE_NAME:${{ github.sha }}
+
+      # --------------------------------------------------
+      # Install Syft
+      # --------------------------------------------------
+
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@v0
+
+      # --------------------------------------------------
+      # Generate SBOM
+      # --------------------------------------------------
+
+      - name: Generate SBOM
+        run: |
+          syft \
+          $IMAGE_NAME:${{ github.sha }} \
+          -o cyclonedx-json > sbom.json
+
+      # --------------------------------------------------
+      # Upload SBOM
+      # --------------------------------------------------
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.json
+
+      # --------------------------------------------------
+      # Attach SBOM Attestation
+      # --------------------------------------------------
+
+      - name: Attach SBOM Attestation
+        run: |
+          cosign attest \
+            --yes \
+            --predicate sbom.json \
+            --type cyclonedx \
+            $IMAGE_NAME:${{ github.sha }}
+
+      # --------------------------------------------------
+      # Image Digest
+      # --------------------------------------------------
+
+      - name: Show Image Digest
+        run: |
+          docker inspect \
+          --format='{{index .RepoDigests 0}}' \
+          $IMAGE_NAME:${{ github.sha }}
+
+      # --------------------------------------------------
+      # GitOps Ready
+      # --------------------------------------------------
+
+      - name: GitOps Ready
+        run: |
+          echo "Ready for ArgoCD GitOps deployment"
