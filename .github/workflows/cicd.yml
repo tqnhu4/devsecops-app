@@ -83,35 +83,43 @@ jobs:
 
           load: true
 
+      - name: Install Trivy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget apt-transport-https gnupg lsb-release
+
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | \
+          gpg --dearmor | \
+          sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
+
+          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] \
+          https://aquasecurity.github.io/trivy-repo/deb \
+          $(lsb_release -sc) main" | \
+          sudo tee /etc/apt/sources.list.d/trivy.list
+
+          sudo apt-get update
+          sudo apt-get install -y trivy          
+
       # --------------------------------------------------
       # Trivy Filesystem Scan
       # --------------------------------------------------
 
       - name: Trivy Filesystem Scan
-        uses: aquasecurity/trivy-action@v0.33.1
-        with:
-          scan-type: fs
-          scan-ref: .
-
-          severity: CRITICAL,HIGH
-
-          exit-code: 1
+        run: |
+          trivy fs . \
+            --severity CRITICAL,HIGH \
+            --exit-code 1
 
       # --------------------------------------------------
       # Trivy Image Scan
       # --------------------------------------------------
 
       - name: Trivy Image Scan
-        uses: aquasecurity/trivy-action@v0.33.1
-        with:
-          image-ref: ${{ env.IMAGE_NAME }}:${{ github.sha }}
-
-          format: sarif
-          output: trivy-results.sarif
-
-          severity: CRITICAL,HIGH
-
-          exit-code: 1
+        run: |
+          trivy image \
+            --severity CRITICAL,HIGH \
+            --exit-code 1 \
+            $IMAGE_NAME:${{ github.sha }}
 
       # --------------------------------------------------
       # Upload SARIF
