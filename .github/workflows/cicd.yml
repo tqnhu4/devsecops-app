@@ -221,6 +221,22 @@ jobs:
           --format='{{index .RepoDigests 0}}' \
           $IMAGE_NAME:${{ github.sha }}
 
+      - name: Update GitOps repo
+        run: |
+          git clone https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/tqnhu4/devsecops-platform.git
+          cd devsecops-platform
+
+          sudo snap install yq
+
+          yq -i '.image.tag = "${{ github.sha }}"' gitops/environments/dev/kustomization.yaml
+
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+
+          git add .
+          git commit -m "Update image to ${{ github.sha }}"
+          git push          
+
       # --------------------------------------------------
       # GitOps Ready
       # --------------------------------------------------
