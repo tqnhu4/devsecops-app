@@ -221,33 +221,16 @@ jobs:
           --format='{{index .RepoDigests 0}}' \
           $IMAGE_NAME:${{ github.sha }}
 
-      #- name: Update GitOps repo
-      #  run: |
-      #    git clone https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/tqnhu4/devsecops-platform.git
-          
-      #    sudo snap install yq
-
-      #    cd devsecops-platform/gitops/environments/dev
-
-      #    kustomize edit set image \
-      #      ghcr.io/tqnhu4/web-frontend=ghcr.io/tqnhu4/web-frontend:${{ github.sha }}
-
-      #    git config user.name "github-actions"
-      #    git config user.email "actions@github.com"
-
-      #    git add .
-      #    git commit -m "Update image to ${{ github.sha }}" || echo "No changes"
-      #    git push          
-
       - name: Update GitOps repo
         run: |
           git clone https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/tqnhu4/devsecops-platform.git
           
           sudo snap install yq
 
-          cd devsecops-platform
+          cd devsecops-platform/gitops/environments/dev
 
-          yq -i '.image.tag = "${{ github.sha }}"' gitops/apps/web-frontend/deployment.yaml
+          kustomize edit set image \
+            ghcr.io/tqnhu4/web-frontend=ghcr.io/tqnhu4/web-frontend:${{ github.sha }}
 
           git config user.name "github-actions"
           git config user.email "actions@github.com"
@@ -255,6 +238,23 @@ jobs:
           git add .
           git commit -m "Update image to ${{ github.sha }}" || echo "No changes"
           git push          
+
+      #- name: Update GitOps repo
+      #  run: |
+      #    git clone https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/tqnhu4/devsecops-platform.git
+          
+      #    sudo snap install yq
+
+      #    cd devsecops-platform
+
+      #    yq -i '.image.tag = "${{ github.sha }}"' gitops/apps/web-frontend/deployment.yaml
+
+      #    git config user.name "github-actions"
+      #    git config user.email "actions@github.com"
+
+      #    git add .
+      #    git commit -m "Update image to ${{ github.sha }}" || echo "No changes"
+      #    git push          
 
       # --------------------------------------------------
       # GitOps Ready
