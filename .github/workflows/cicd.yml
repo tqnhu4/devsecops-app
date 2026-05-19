@@ -223,7 +223,7 @@ jobs:
 
       - name: Update GitOps repo
         run: |
-          git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/tqnhu4/devsecops-platform.git
+          git clone https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/tqnhu4/devsecops-platform.git
           
           sudo snap install yq
 
@@ -241,7 +241,7 @@ jobs:
 
       #- name: Update GitOps repo
       #  run: |
-      #    git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/tqnhu4/devsecops-platform.git
+      #    git clone https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/tqnhu4/devsecops-platform.git
           
       #    sudo snap install yq
 
