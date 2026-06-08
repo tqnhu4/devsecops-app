@@ -1,4 +1,7 @@
-FROM nginx:stable-alpine
+#FROM nginx:stable-alpine
+FROM nginx:1.29-alpine
+
+RUN apk update && apk upgrade --no-cache
 
 RUN rm -rf /usr/share/nginx/html/*
 
